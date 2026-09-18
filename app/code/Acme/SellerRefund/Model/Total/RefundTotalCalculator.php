@@ -123,7 +123,7 @@ class RefundTotalCalculator
 
     /**
      * @param RefundFigureLine[] $lines
-     * @param array{subtotal:string, shipping:string, tax:string, grand_total:string} $preRefund
+     * @param array{subtotal:string, shipping:string, tax:string, grand_total:string, tax_groups: RefundTaxGroup[]} $preRefund
      */
     private function assemble(array $lines, array $preRefund, string $currency, bool $partial): RefundFigures
     {
@@ -143,6 +143,7 @@ class RefundTotalCalculator
             $preRefund['shipping'],
             $preRefund['tax'],
             $preRefund['grand_total'],
+            $preRefund['tax_groups'],
             $subtotal,
             $shipping,
             $tax,
@@ -155,9 +156,11 @@ class RefundTotalCalculator
 
     /**
      * Pre-refund seller totals: every seller line at its ordered quantity with the full
-     * seller shipping allocated by ex-tax row amount.
+     * seller shipping allocated by ex-tax row amount. The per-line taxable amount and tax are
+     * grouped by rate through the same RefundTaxGroup::group() used for the refund side, so
+     * the breakdown is never derived a second, independent way.
      *
-     * @return array{subtotal:string, shipping:string, tax:string, grand_total:string}
+     * @return array{subtotal:string, shipping:string, tax:string, grand_total:string, tax_groups: RefundTaxGroup[]}
      */
     private function preRefund(OrderInterface $order): array
     {
@@ -177,13 +180,18 @@ class RefundTotalCalculator
 
         $subtotal = self::ZERO;
         $tax = self::ZERO;
+        $rows = [];
         foreach ($sellerLines as $orderItemId => $item) {
             $rowAmount = $rowAmounts[$orderItemId];
             $share = $shippingShares[$orderItemId] ?? self::ZERO;
             $code = $this->taxCodeResolver->toBusinessCode((int) $item->getData('mp_tax_class'));
             $rate = $this->taxCodeResolver->rateFor($code);
+            $taxable = bcadd($rowAmount, $share, self::SCALE);
+            $lineTax = bcmul($taxable, $rate, self::SCALE);
+
             $subtotal = bcadd($subtotal, $rowAmount, self::SCALE);
-            $tax = bcadd($tax, bcmul(bcadd($rowAmount, $share, self::SCALE), $rate, self::SCALE), self::SCALE);
+            $tax = bcadd($tax, $lineTax, self::SCALE);
+            $rows[] = ['rate' => $rate, 'code' => $code, 'taxable' => $taxable, 'tax' => $lineTax];
         }
 
         $grandTotal = bcadd(bcadd($subtotal, $shipping, self::SCALE), $tax, self::SCALE);
@@ -193,6 +201,7 @@ class RefundTotalCalculator
             'shipping' => $shipping,
             'tax' => $tax,
             'grand_total' => $grandTotal,
+            'tax_groups' => RefundTaxGroup::group($rows),
         ];
     }
 

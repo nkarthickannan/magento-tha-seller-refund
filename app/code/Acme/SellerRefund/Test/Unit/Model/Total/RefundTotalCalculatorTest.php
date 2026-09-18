@@ -159,6 +159,40 @@ class RefundTotalCalculatorTest extends TestCase
     }
 
     /**
+     * The review of PR #1 asked for preRefund() itself to return the tax grouped by rate,
+     * rather than have the receipt re-derive it. This exercises exactly that: two seller lines
+     * at their full ordered quantity (not the refunded quantity) and two different rates must
+     * come back as two separate pre-refund groups, computed once inside preRefund().
+     */
+    public function testPreRefundTaxGroupsByRateAtOrderedQuantity(): void
+    {
+        $lines = [
+            1 => $this->item(1200.0, 5.0, 101, 'SELLER-RED-01', 'Seller Red Widget'),
+            2 => $this->item(800.0, 5.0, 102, 'SELLER-BLU-02', 'Seller Blue Gadget'),
+        ];
+
+        // A partial refund selection: only 2 of each line's 5 ordered units.
+        $figures = $this->calculator($lines)->fromSelection(
+            $this->order('0.0000'),
+            [1 => '2', 2 => '2'],
+            [],
+            new DateTimeImmutable()
+        );
+
+        $groups = $figures->preRefundTaxGroups;
+        self::assertCount(2, $groups);
+
+        // At the full ordered quantity (5, not the refunded 2): row 1200*5=6000, tax 600.
+        self::assertSame('0.0800', $groups[0]->taxRate);
+        self::assertSame('4000.0000', $groups[0]->taxableAmount);
+        self::assertSame('320.0000', $groups[0]->taxAmount);
+
+        self::assertSame('0.1000', $groups[1]->taxRate);
+        self::assertSame('6000.0000', $groups[1]->taxableAmount);
+        self::assertSame('600.0000', $groups[1]->taxAmount);
+    }
+
+    /**
      * @param array<int, OrderItem&MockObject> $sellerLines
      */
     private function calculator(array $sellerLines): RefundTotalCalculator

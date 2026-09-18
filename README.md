@@ -118,6 +118,30 @@ the two branches described in
 [`submission/`](submission/) (starter files are in
 [`docs/candidate/submission-template/`](docs/candidate/submission-template/)).
 
+## Part 3 implementation
+
+The Part 3 fix (per-tax-rate breakdown on the reissued refund receipt, see
+[`submission/04_build-impact-note.md`](submission/04_build-impact-note.md) for
+the defect it addresses and why) lives in:
+
+- `app/code/Acme/SellerRefund/Model/Total/RefundTaxGroup.php`
+- `app/code/Acme/SellerRefund/Model/Total/RefundFigures.php`
+- `app/code/Acme/SellerRefund/Model/Total/RefundTotalCalculator.php`
+- `app/code/Acme/SellerRefund/Model/Pdf/RefundReceipt.php`
+- `app/code/Acme/SellerRefund/Test/Unit/Model/Total/RefundTotalCalculatorTest.php`
+- `app/code/Acme/SellerRefund/Test/Unit/Model/Total/RefundFiguresTest.php`
+- `app/code/Acme/SellerRefund/Test/Unit/Model/Pdf/RefundReceiptTest.php`
+
+Implementation commit: <!-- TODO: fill in the commit SHA once this is committed -->`<commit-sha>`
+
+Exact test command:
+
+```bash
+bin/assignment-test unit --filter 'RefundTotalCalculatorTest|RefundFiguresTest|RefundReceiptTest'
+```
+
+The full bounded suite (`bin/assignment-test all`) also passes with this change in place.
+
 ## Runtime details and troubleshooting
 
 See [`docs/build-notes/`](docs/build-notes/): component versions and image

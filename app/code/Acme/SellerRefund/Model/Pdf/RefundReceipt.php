@@ -6,6 +6,8 @@ namespace Acme\SellerRefund\Model\Pdf;
 
 use Acme\SellerRefund\Api\Data\RefundInterface;
 use Acme\SellerRefund\Api\RefundRepositoryInterface;
+use Acme\SellerRefund\Model\Total\RefundFigureLine;
+use Acme\SellerRefund\Model\Total\RefundTaxGroup;
 use Acme\SellerRefund\Model\Total\RefundTotalCalculator;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use Magento\Sales\Api\OrderRepositoryInterface;
@@ -28,6 +30,12 @@ class RefundReceipt
     /**
      * View data for the receipt. This is the harness inspection point.
      *
+     * 'pre_refund' and 'refund' are deliberately kept identical in shape to
+     * RefundFigures::toArray() - every other presentation and export surface builds those same
+     * four keys, and SurfacesAgreeOnPureSellerOrderTest asserts this receipt's 'refund' matches
+     * them exactly. The tax-rate breakdown is therefore its own top-level key, not nested
+     * inside either total.
+     *
      * @return array<string, mixed>
      */
     public function buildData(RefundInterface $refund): array
@@ -47,14 +55,16 @@ class RefundReceipt
                 'tax' => $figures->preRefundTax,
                 'grand_total' => $figures->preRefundGrandTotal,
             ],
+            'pre_refund_tax_groups' => $this->groupsToArray($figures->preRefundTaxGroups),
             'refund' => [
                 'subtotal' => $figures->refundSubtotal,
                 'shipping' => $figures->refundShipping,
                 'tax' => $figures->refundTax,
                 'grand_total' => $figures->refundGrandTotal,
             ],
+            'refund_tax_groups' => $this->groupsToArray($figures->taxGroups()),
             'lines' => array_map(
-                static fn (\Acme\SellerRefund\Model\Total\RefundFigureLine $line): array => $line->toArray(),
+                static fn (RefundFigureLine $line): array => $line->toArray(),
                 $figures->lines
             ),
         ];
@@ -104,12 +114,16 @@ class RefundReceipt
         $y = $this->line($page, 'Pre-refund Total', $y, 14);
         $page->setFont($font, 10);
         $y = $this->totals($page, $data['pre_refund'], $currency, $y);
+        $page->setFont($font, 9);
+        $y = $this->taxGroupLines($page, $data['pre_refund_tax_groups'], $currency, $y);
 
         $y -= 8;
         $page->setFont($bold, 11);
         $y = $this->line($page, 'Refund', $y, 14);
         $page->setFont($font, 10);
-        $this->totals($page, $data['refund'], $currency, $y);
+        $y = $this->totals($page, $data['refund'], $currency, $y);
+        $page->setFont($font, 9);
+        $this->taxGroupLines($page, $data['refund_tax_groups'], $currency, $y);
 
         return $pdf->render();
     }
@@ -123,6 +137,27 @@ class RefundReceipt
         $y = $this->line($page, 'Shipping: ' . $this->money($totals['shipping'], $currency), $y);
         $y = $this->line($page, 'Consumption Tax: ' . $this->money($totals['tax'], $currency), $y);
         $y = $this->line($page, 'Total: ' . $this->money($totals['grand_total'], $currency), $y);
+
+        return $y;
+    }
+
+    /**
+     * The qualified-invoice breakdown of one section's consumption tax by rate.
+     *
+     * @param array<int, array<string, string>> $groups
+     */
+    private function taxGroupLines(\Zend_Pdf_Page $page, array $groups, string $currency, float $y): float
+    {
+        foreach ($groups as $group) {
+            $ratePercent = number_format(((float) $group['tax_rate']) * 100, 0);
+            $text = sprintf(
+                '  of which %s%%: taxable %s, tax %s',
+                $ratePercent,
+                $this->money($group['taxable_amount'], $currency),
+                $this->money($group['tax_amount'], $currency)
+            );
+            $y = $this->line($page, $text, $y);
+        }
 
         return $y;
     }
@@ -157,5 +192,15 @@ class RefundReceipt
         }
 
         return (string) preg_replace('/[^\x20-\x7E]/', '?', $converted);
+    }
+
+    /**
+     * @param RefundTaxGroup[] $groups
+     *
+     * @return array<int, array<string, string>>
+     */
+    private function groupsToArray(array $groups): array
+    {
+        return array_map(static fn (RefundTaxGroup $group): array => $group->toArray(), $groups);
     }
 }
