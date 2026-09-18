@@ -121,7 +121,7 @@ the two branches described in
 ## Part 3 implementation
 
 The Part 3 fix (per-tax-rate breakdown on the reissued refund receipt, see
-[`submission/04_build-impact-note.md`](submission/04_build-impact-note.md) for
+[`submission/04-build-impact-note.md`](submission/04-build-impact-note.md) for
 the defect it addresses and why) lives in:
 
 - `app/code/Acme/SellerRefund/Model/Total/RefundTaxGroup.php`
@@ -132,7 +132,7 @@ the defect it addresses and why) lives in:
 - `app/code/Acme/SellerRefund/Test/Unit/Model/Total/RefundFiguresTest.php`
 - `app/code/Acme/SellerRefund/Test/Unit/Model/Pdf/RefundReceiptTest.php`
 
-Implementation commit: <!-- TODO: fill in the commit SHA once this is committed -->`<commit-sha>`
+Implementation commit: `011fbbee42432220d6be336a0686a3682156740f` - "Part 3 is completed"
 
 Exact test command:
 
