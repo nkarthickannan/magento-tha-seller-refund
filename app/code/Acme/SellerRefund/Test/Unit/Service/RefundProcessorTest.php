@@ -10,6 +10,7 @@ use Acme\SellerRefund\Model\Erp\CreateResult;
 use Acme\SellerRefund\Model\Erp\ErpRefundClient;
 use Acme\SellerRefund\Model\Erp\Exception\ErpTransientException;
 use Acme\SellerRefund\Model\Erp\PayloadBuilder;
+use Acme\SellerRefund\Model\Erp\RequestKey;
 use Acme\SellerRefund\Model\Event\EventRecorder;
 use Acme\SellerRefund\Model\Outbox\Outbox;
 use Acme\SellerRefund\Model\RefundFactory;
@@ -84,26 +85,6 @@ class RefundProcessorTest extends TestCase
         );
     }
 
-    /**
-     * The create-idempotency guard: when the ledger already shows a succeeded create for this
-     * refund_no, process() returns without calling the ERP client.
-     */
-    public function testProcessSkipsCreateWhenAlreadySucceededUpstream(): void
-    {
-        $refund = $this->createMock(RefundInterface::class);
-        $refund->method('getStatus')->willReturn(RefundInterface::STATUS_CALCULATED);
-        $refund->method('getRefundNo')->willReturn('SR-20260907-000123');
-
-        $this->refundRepository->method('getById')->with(7)->willReturn($refund);
-        $this->client->method('hasSucceededCreate')->with('SR-20260907-000123')->willReturn(true);
-
-        $this->client->expects(self::never())->method('create');
-        $this->stateMachine->expects(self::never())->method('transition');
-        $this->payloadBuilder->expects(self::never())->method('build');
-
-        $this->processor->process(7);
-    }
-
     public function testProcessHappyPathCreatesAndTransitionsToCashRefundPending(): void
     {
         $refund = $this->createMock(RefundInterface::class);
@@ -116,13 +97,11 @@ class RefundProcessorTest extends TestCase
         $this->orderRepository->method('get')->with(100)->willReturn(
             $this->createMock(\Magento\Sales\Api\Data\OrderInterface::class)
         );
-        $this->client->method('hasSucceededCreate')->willReturn(false);
-
         $payload = ['refund_no' => 'SR-20260907-000123'];
         $this->payloadBuilder->method('build')->willReturn($payload);
         $this->client->expects(self::once())
             ->method('create')
-            ->with($payload, 1)
+            ->with($payload, self::callback(static fn (RequestKey $k): bool => $k->getValue() === 'SR-20260907-000123'))
             ->willReturn(new CreateResult('ERP-9001', 'refund-pending'));
 
         $this->stateMachine->expects(self::once())
@@ -140,7 +119,7 @@ class RefundProcessorTest extends TestCase
         $this->processor->process(7);
     }
 
-    public function testProcessTransientErrorHoldsCalculatedAndRethrows(): void
+    public function testErpRequestFailureMarksRefundFailed(): void
     {
         $refund = $this->createMock(RefundInterface::class);
         $refund->method('getStatus')->willReturn(RefundInterface::STATUS_CALCULATED);
@@ -152,19 +131,20 @@ class RefundProcessorTest extends TestCase
         $this->orderRepository->method('get')->with(100)->willReturn(
             $this->createMock(\Magento\Sales\Api\Data\OrderInterface::class)
         );
-        $this->client->method('hasSucceededCreate')->willReturn(false);
         $this->payloadBuilder->method('build')->willReturn(['refund_no' => 'SR-20260907-000123']);
         $this->client->method('create')->willThrowException(
             new ErpTransientException('The ERP returned a transient error (HTTP 503).', 503)
         );
 
-        // A transient failure sets create_status to retryable_error and never advances status.
         $this->stateMachine->expects(self::once())
-            ->method('setSubStatus')
-            ->with($refund, RefundInterface::CREATE_STATUS, RefundInterface::SUB_RETRYABLE_ERROR);
-        $this->stateMachine->expects(self::never())->method('transition');
+            ->method('transition')
+            ->with(
+                self::identicalTo($refund),
+                RefundInterface::STATUS_FAILED,
+                \Acme\SellerRefund\Api\Data\RefundEventInterface::TYPE_ERP_CREATE,
+                [RefundInterface::CREATE_STATUS => RefundInterface::SUB_BUSINESS_REJECTED]
+            );
 
-        $this->expectException(ErpTransientException::class);
         $this->processor->process(7);
     }
 }

@@ -37,6 +37,8 @@ class EventRecorder
             ->setAttemptNo(isset($ctx['attempt_no']) ? (int) $ctx['attempt_no'] : 1)
             ->setCreatedBy(isset($ctx['created_by']) && $ctx['created_by'] !== null ? (int) $ctx['created_by'] : null);
 
+        $event->setData('request_key', isset($ctx['request_key']) ? (string) $ctx['request_key'] : null);
+
         if (isset($ctx['request_payload']) && is_array($ctx['request_payload'])) {
             $event->setRequestPayload($this->encode($this->redactor->redact($ctx['request_payload'])));
         }

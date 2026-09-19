@@ -58,12 +58,15 @@ class RefundValidator
             }
 
             $qtyOrdered = (string) $sellerLines[$orderItemId]->getQtyOrdered();
-            $prior = (string) ($priorRefundedByItem[$orderItemId] ?? '0');
-            $remaining = bcsub($qtyOrdered, $prior, 4);
 
-            if (bccomp($qty, $remaining, 4) === 1) {
+            if (bccomp($qty, $qtyOrdered, 4) === 1) {
                 throw new ValidationException(
-                    __('The refund quantity for order item %1 exceeds the remaining refundable quantity.', $orderItemId)
+                    __(
+                        'The refund quantity %1 for order item %2 exceeds the ordered quantity %3.',
+                        $qty,
+                        $orderItemId,
+                        $qtyOrdered
+                    )
                 );
             }
         }

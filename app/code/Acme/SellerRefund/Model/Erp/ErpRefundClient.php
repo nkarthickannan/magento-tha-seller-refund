@@ -8,7 +8,6 @@ use Acme\SellerRefund\Model\Config;
 use Acme\SellerRefund\Model\Erp\Exception\ErpBusinessException;
 use Acme\SellerRefund\Model\Erp\Exception\ErpConflictException;
 use Acme\SellerRefund\Model\Erp\Exception\ErpTransientException;
-use Acme\SellerRefund\Model\ResourceModel\Refund as RefundResource;
 use Magento\Framework\HTTP\Client\Curl;
 use Magento\Framework\HTTP\Client\CurlFactory;
 
@@ -22,18 +21,17 @@ class ErpRefundClient
 
     public function __construct(
         private readonly CurlFactory $curlFactory,
-        private readonly Config $config,
-        private readonly RefundResource $refundResource
+        private readonly Config $config
     ) {
     }
 
     /**
      * @param array<string, mixed> $payload
      */
-    public function create(array $payload, int $attempt = 1): CreateResult
+    public function create(array $payload, RequestKey $key): CreateResult
     {
-        $refundNo = (string) ($payload['refund_no'] ?? '');
-        $curl = $this->newCurl($refundNo . ':' . $attempt);
+        $curl = $this->newCurl($key->getValue());
+        $curl->addHeader('X-Request-Id', $key->getValue());
         $uri = $this->config->erpBaseUrl() . self::CREATE_PATH;
 
         $this->send($curl, $uri, $payload);
@@ -80,15 +78,6 @@ class ErpRefundClient
         $this->classify($curl, false);
 
         return $this->decode($curl->getBody());
-    }
-
-    /**
-     * Fresh ledger check used by the create-idempotency guard: has a create for this
-     * refund_no already succeeded upstream?
-     */
-    public function hasSucceededCreate(string $refundNo): bool
-    {
-        return $this->refundResource->isCreateSucceeded($refundNo);
     }
 
     private function newCurl(string $correlationId): Curl

@@ -7,6 +7,8 @@ namespace Acme\SellerRefund\Test\Unit\Model\Erp;
 use Acme\SellerRefund\Api\Data\RefundInterface;
 use Acme\SellerRefund\Api\Data\RefundItemInterface;
 use Acme\SellerRefund\Model\Erp\PayloadBuilder;
+use Acme\SellerRefund\Model\Erp\RequestKey;
+use Acme\SellerRefund\Model\Tax\TaxCodeResolver;
 use Magento\Sales\Api\Data\OrderInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -21,7 +23,9 @@ class PayloadBuilderTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->builder = new PayloadBuilder();
+        $taxCodeResolver = $this->createMock(TaxCodeResolver::class);
+        $taxCodeResolver->method('toOptionId')->willReturnMap([['010', 7], ['008', 6]]);
+        $this->builder = new PayloadBuilder($taxCodeResolver);
     }
 
     public function testBuildProducesTheFrdShape(): void
@@ -38,7 +42,12 @@ class PayloadBuilderTest extends TestCase
             $this->item('SELLER-BLU-02', '2', '1600.0000', '008', '128.0000'),
         ];
 
-        $payload = $this->builder->build($refund, $items, $this->createMock(OrderInterface::class));
+        $payload = $this->builder->build(
+            $refund,
+            $items,
+            $this->createMock(OrderInterface::class),
+            RequestKey::forAttempt($refund, 1)
+        );
 
         self::assertSame('SR-20260907-000123', $payload['refund_no']);
         self::assertSame('SO-1002', $payload['seller_order_id']);
@@ -52,13 +61,13 @@ class PayloadBuilderTest extends TestCase
             'sku' => 'SELLER-RED-01',
             'quantity' => 1,
             'amount' => '1200.0000',
-            'taxes' => [['code' => '010', 'amount' => '120.0000']],
+            'taxes' => [['code' => '7', 'amount' => '120.0000']],
         ], $payload['lines'][0]);
         self::assertSame([
             'sku' => 'SELLER-BLU-02',
             'quantity' => 2,
             'amount' => '1600.0000',
-            'taxes' => [['code' => '008', 'amount' => '128.0000']],
+            'taxes' => [['code' => '6', 'amount' => '128.0000']],
         ], $payload['lines'][1]);
     }
 
@@ -68,7 +77,7 @@ class PayloadBuilderTest extends TestCase
 
         $taxes = $this->builder->buildTaxes($item);
 
-        self::assertSame([['code' => '010', 'amount' => '120.0000']], $taxes);
+        self::assertSame([['code' => '7', 'amount' => '120.0000']], $taxes);
     }
 
     private function item(

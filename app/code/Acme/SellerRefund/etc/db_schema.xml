@@ -32,10 +32,6 @@
             <column name="refund_no"/>
         </constraint>
         <constraint xsi:type="foreign" referenceId="MP_REFUND_ORDER_ID_SALES_ORDER_ENTITY_ID" table="mp_refund" column="order_id" referenceTable="sales_order" referenceColumn="entity_id" onDelete="CASCADE"/>
-        <index referenceId="MP_REFUND_STATUS_CREATED_AT" indexType="btree">
-            <column name="status"/>
-            <column name="created_at"/>
-        </index>
         <index referenceId="MP_REFUND_ORDER_ID" indexType="btree">
             <column name="order_id"/>
         </index>
@@ -84,6 +80,7 @@
         <column xsi:type="text" name="response_payload" nullable="true" comment="Redacted response payload"/>
         <column xsi:type="varchar" name="error_code" length="64" nullable="true" comment="Error code"/>
         <column xsi:type="int" name="attempt_no" unsigned="true" nullable="false" default="1" comment="Attempt number"/>
+        <column xsi:type="varchar" name="request_key" length="64" nullable="true" comment="ERP request key for the attempt"/>
         <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP" comment="Created at"/>
         <column xsi:type="int" name="created_by" unsigned="true" nullable="true" comment="Actor"/>
         <constraint xsi:type="primary" referenceId="PRIMARY">

@@ -46,22 +46,6 @@ class Refund extends AbstractDb
         return $connection->query($sql, $bind)->rowCount() === 1;
     }
 
-    /**
-     * Fresh read used by the create-idempotency guard: has this refund_no already been
-     * created upstream? Reads the current row directly rather than any in-memory copy.
-     */
-    public function isCreateSucceeded(string $refundNo): bool
-    {
-        $connection = $this->getConnection();
-        $select = $connection->select()
-            ->from($this->getMainTable(), ['entity_id'])
-            ->where('refund_no = ?', $refundNo)
-            ->where('create_status = ? OR erp_refund_id IS NOT NULL', RefundInterface::SUB_SUCCEEDED)
-            ->limit(1);
-
-        return (bool) $connection->fetchOne($select);
-    }
-
     protected function _beforeSave(AbstractModel $object): AbstractDb
     {
         if (!$object->isObjectNew()
